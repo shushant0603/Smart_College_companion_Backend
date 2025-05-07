@@ -37,6 +37,9 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ message: 'Something went wrong!' });
 });
+app.get("/",(req,res)=>{
+  res.send("Welcome to Smart College Companion Backend");
+})
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
