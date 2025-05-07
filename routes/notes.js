@@ -98,7 +98,7 @@ router.post('/:id/summarize', protect, async (req, res) => {
       return res.status(404).json({ message: 'Note not found' });
     }
 
-    note.summary = note.content.substring(0, 150) + '...';
+    note.summary = note.content.substring(0, 500) + '...';
     await note.save();
 
     res.json(note);
