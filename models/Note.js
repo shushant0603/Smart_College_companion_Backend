@@ -21,6 +21,9 @@ const noteSchema = new mongoose.Schema({
   summary: {
     type: String,
   },
+  keyPoints: {
+    type: String,
+  },
   tags: [{
     type: String,
   }],

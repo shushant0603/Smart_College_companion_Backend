@@ -1,8 +1,38 @@
 import express from 'express';
 import { protect } from '../middleware/auth.js';
 import Note from '../models/Note.js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const router = express.Router();
+
+// Initialize Gemini AI
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// Function to generate summary and key points using Gemini
+async function generateAIContent(content) {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    
+    // Generate summary
+    const summaryPrompt = `Generate a concise summary (max 150 words) of the following text:\n\n${content}`;
+    const summaryResult = await model.generateContent(summaryPrompt);
+    const summary = summaryResult.response.text();
+    
+    // Generate key points
+    const keyPointsPrompt = `Extract 3-5 key points from the following text:\n\n${content}`;
+    const keyPointsResult = await model.generateContent(keyPointsPrompt);
+    const keyPoints = keyPointsResult.response.text();
+    
+    return { summary, keyPoints };
+  } catch (error) {
+    console.error('Error generating AI content:', error);
+    // Fallback to simple summary if AI fails
+    return {
+      summary: content.substring(0, 150) + '...',
+      keyPoints: 'Key points generation failed'
+    };
+  }
+}
 
 // Get all notes for a user
 router.get('/', protect, async (req, res) => {
@@ -20,12 +50,16 @@ router.post('/', protect, async (req, res) => {
   try {
     const { subject, title, content, tags } = req.body;
 
+    // Generate AI content
+    const { summary, keyPoints } = await generateAIContent(content);
+
     const note = await Note.create({
       user: req.user._id,
       subject,
       title,
       content,
-      summary: content.substring(0, 150) + '...', // Simple summary
+      summary,
+      keyPoints,
       tags,
     });
 
@@ -48,9 +82,11 @@ router.put('/:id', protect, async (req, res) => {
       return res.status(404).json({ message: 'Note not found' });
     }
 
-    // If content is updated, update summary
+    // If content is updated, regenerate AI content
     if (req.body.content && req.body.content !== note.content) {
-      req.body.summary = req.body.content.substring(0, 150) + '...';
+      const { summary, keyPoints } = await generateAIContent(req.body.content);
+      req.body.summary = summary;
+      req.body.keyPoints = keyPoints;
     }
 
     const updatedNote = await Note.findByIdAndUpdate(
@@ -86,7 +122,7 @@ router.delete('/:id', protect, async (req, res) => {
   }
 });
 
-// Regenerate summary for a note
+// Regenerate summary and key points for a note
 router.post('/:id/summarize', protect, async (req, res) => {
   try {
     const note = await Note.findOne({
@@ -98,12 +134,14 @@ router.post('/:id/summarize', protect, async (req, res) => {
       return res.status(404).json({ message: 'Note not found' });
     }
 
-    note.summary = note.content.substring(0, 500) + '...';
+    const { summary, keyPoints } = await generateAIContent(note.content);
+    note.summary = summary;
+    note.keyPoints = keyPoints;
     await note.save();
 
     res.json(note);
   } catch (error) {
-    console.error('Error regenerating summary:', error);
+    console.error('Error regenerating AI content:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
